@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebSSH — Remote Terminal</title>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --accent-hover: #79b8ff;
+      --green: #3fb950;
+      --red: #f85149;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --radius: 8px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo svg { width: 22px; height: 22px; }
+
+    .status-badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--surface2);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      transition: all .3s;
+    }
+
+    .status-badge.connected {
+      background: rgba(63,185,80,.15);
+      color: var(--green);
+      border-color: rgba(63,185,80,.4);
+    }
+
+    .status-badge.error {
+      background: rgba(248,81,73,.15);
+      color: var(--red);
+      border-color: rgba(248,81,73,.4);
+    }
+
+    .header-actions { margin-left: auto; display: flex; gap: 8px; }
+
+    /* ── Layout ── */
+    .layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 300px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+
+    .sidebar-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-section h3 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .form-group { margin-bottom: 10px; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 7px 10px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: border-color .2s;
+      font-family: inherit;
+    }
+
+    input:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 80px; font-family: 'Courier New', monospace; font-size: 11px; }
+
+    .row-2 { display: grid; grid-template-columns: 1fr 80px; gap: 8px; }
+
+    .btn {
+      padding: 8px 14px;
+      border-radius: var(--radius);
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all .2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0d1117;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+    .btn-danger {
+      background: rgba(248,81,73,.15);
+      color: var(--red);
+      border: 1px solid rgba(248,81,73,.4);
+      width: 100%;
+      justify-content: center;
+    }
+
+    .btn-danger:hover { background: rgba(248,81,73,.25); }
+
+    .tab-group {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 10px;
+      background: var(--surface2);
+      padding: 3px;
+      border-radius: var(--radius);
+    }
+
+    .tab {
+      flex: 1;
+      padding: 5px;
+      text-align: center;
+      border-radius: 5px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all .2s;
+      border: none;
+      background: none;
+    }
+
+    .tab.active { background: var(--surface); color: var(--text); }
+
+    /* ── Saved Sessions ── */
+    .session-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background .15s;
+      font-size: 13px;
+    }
+
+    .session-item:hover { background: var(--surface2); }
+
+    .session-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .session-info { flex: 1; overflow: hidden; }
+    .session-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .session-host { font-size: 11px; color: var(--text-muted); }
+
+    .session-del {
+      opacity: 0;
+      background: none;
+      border: none;
+      color: var(--red);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: opacity .15s;
+    }
+
+    .session-item:hover .session-del { opacity: 1; }
+
+    /* ── Terminal area ── */
+    .terminal-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .terminal-toolbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .traffic-lights { display: flex; gap: 6px; }
+    .tl { width: 12px; height: 12px; border-radius: 50%; }
+    .tl-red   { background: #ff5f57; }
+    .tl-yellow{ background: #ffbd2e; }
+    .tl-green { background: #28c840; }
+
+    .terminal-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: 'Courier New', monospace;
+    }
+
+    .toolbar-right { margin-left: auto; display: flex; gap: 6px; }
+
+    .btn-icon {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 4px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all .15s;
+    }
+
+    .btn-icon:hover { color: var(--text); border-color: var(--accent); }
+
+    #terminal-container {
+      flex: 1;
+      padding: 6px;
+      overflow: hidden;
+    }
+
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: var(--text-muted);
+    }
+
+    .empty-state svg { opacity: .3; }
+    .empty-state p { font-size: 14px; }
+
+    #log-panel {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 8px 16px;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      color: var(--text-muted);
+      height: 36px;
+      flex-shrink: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="2" y="3" width="20" height="14" rx="2"/>
+      <path d="M8 21h8M12 17v4"/>
+      <path d="M7 8l3 3-3 3M13 14h4"/>
+    </svg>
+    WebSSH
+  </div>
+  <span class="status-badge" id="statusBadge">● Disconnected</span>
+  <div class="header-actions">
+    <button class="btn-icon" onclick="clearTerminal()" title="Очистить терминал">⌫ Clear</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <h3>Подключение</h3>
+
+      <div class="form-group row-2">
+        <div>
+          <label>Host / IP</label>
+          <input type="text" id="host" placeholder="192.168.1.1" />
+        </div>
+        <div>
+          <label>Port</label>
+          <input type="number" id="port" value="22" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="username" placeholder="root" />
+      </div>
+
+      <div class="tab-group">
+        <button class="tab active" onclick="switchAuth('password', this)">🔑 Password</button>
+        <button class="tab" onclick="switchAuth('key', this)">🗝 Private Key</button>
+      </div>
+
+      <div id="auth-password" class="form-group">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••" />
+      </div>
+
+      <div id="auth-key" class="form-group" style="display:none">
+        <label>Private Key (PEM)</label>
+        <textarea id="privateKey" placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;..."></textarea>
+      </div>
+
+      <div class="form-group" style="margin-top:4px">
+        <label>Сохранить как</label>
+        <input type="text" id="sessionName" placeholder="My Server" />
+      </div>
+
+      <button class="btn btn-primary" id="connectBtn" onclick="connect()">
+        ⚡ Connect
+      </button>
+      <button class="btn btn-danger" id="disconnectBtn" onclick="disconnect()" style="margin-top:6px; display:none">
+        ✕ Disconnect
+      </button>
+    </div>
+
+    <div class="sidebar-section" style="flex:1">
+      <h3>Сохранённые сессии</h3>
+      <div id="sessionsList"></div>
+    </div>
+
+  </aside>
+
+  <!-- ── TERMINAL ── -->
+  <main class="terminal-area">
+    <div class="terminal-toolbar">
+      <div class="traffic-lights">
+        <div class="tl tl-red"></div>
+        <div class="tl tl-yellow"></div>
+        <div class="tl tl-green"></div>
+      </div>
+      <span class="terminal-title" id="termTitle">No connection</span>
+    </div>
+
+    <div id="terminal-container"></div>
+    <div id="log-panel">Ready. Fill in connection details and press Connect.</div>
+  </main>
+
+</div>
+
+<script>
+  // ── xterm init ─────────────────────────────────────────
+  const fitAddon = new FitAddon.FitAddon();
+  const term = new Terminal({
+    theme: {
+      background: '#0d1117', foreground: '#e6edf3',
+      cursor: '#58a6ff', cursorAccent: '#0d1117',
+      selection: 'rgba(88,166,255,.25)',
+      black: '#0d1117', brightBlack: '#6e7681',
+      red: '#f85149', brightRed: '#ff7b72',
+      green: '#3fb950', brightGreen: '#56d364',
+      yellow: '#d29922', brightYellow: '#e3b341',
+      blue: '#58a6ff', brightBlue: '#79b8ff',
+      magenta: '#d2a8ff', brightMagenta: '#d2a8ff',
+      cyan: '#39c5cf', brightCyan: '#56d4dd',
+      white: '#b1bac4', brightWhite: '#e6edf3',
+    },
+    fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+    fontSize: 14,
+    lineHeight: 1.3,
+    cursorBlink: true,
+    cursorStyle: 'bar',
+    scrollback: 5000,
+    allowTransparency: true,
+  });
+
+  term.loadAddon(fitAddon);
+  term.open(document.getElementById('terminal-container'));
+  fitAddon.fit();
+  term.writeln('\x1b[1;34m WebSSH — Web Terminal Client\x1b[0m');
+  term.writeln('\x1b[90m Fill in connection details in the sidebar.\x1b[0m\r\n');
+
+  window.addEventListener('resize', () => {
+    fitAddon.fit();
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'resize', data: { rows: term.rows, cols: term.cols } }));
+    }
+  });
+
+  // ── WebSocket ──────────────────────────────────────────
+  let ws = null;
+  let connected = false;
+
+  function initWS() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}`);
+
+    ws.onopen = () => log('WebSocket ready');
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+
+      if (msg.type === 'output') {
+        const bytes = Uint8Array.from(atob(msg.data.text), c => c.charCodeAt(0));
+        term.write(bytes);
+      }
+
+      if (msg.type === 'status') {
+        setConnected(msg.data.connected);
+        log(msg.data.message);
+        if (msg.data.connected) {
+          document.getElementById('termTitle').textContent =
+            `${document.getElementById('username').value}@${document.getElementById('host').value}`;
+        } else {
+          document.getElementById('termTitle').textContent = 'No connection';
+        }
+      }
+
+      if (msg.type === 'error') {
+        log('ERROR: ' + msg.data.message, true);
+        term.writeln(`\r\n\x1b[31m✖ ${msg.data.message}\x1b[0m\r\n`);
+        setConnected(false);
+      }
+    };
+
+    ws.onclose = () => { setConnected(false); log('WebSocket closed'); };
+    ws.onerror = () => log('WebSocket error', true);
+  }
+
+  initWS();
+
+  // Forward keystrokes to SSH
+  term.onData((data) => {
+    if (ws && ws.readyState === WebSocket.OPEN && connected) {
+      ws.send(JSON.stringify({ type: 'input', data }));
+    }
+  });
+
+  // ── Connect / Disconnect ───────────────────────────────
+  function connect() {
+    const host     = document.getElementById('host').value.trim();
+    const port     = document.getElementById('port').value.trim();
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const privateKey = document.getElementById('privateKey').value.trim();
+    const name     = document.getElementById('sessionName').value.trim();
+
+    if (!host || !username) { log('Host and username are required', true); return; }
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) initWS();
+
+    // Save session
+    if (name) saveSession({ name, host, port, username });
+
+    log(`Connecting to ${username}@${host}:${port}...`);
+    term.writeln(`\r\n\x1b[90m▶ Connecting to ${username}@${host}:${port}...\x1b[0m`);
+
+    ws.send(JSON.stringify({
+      type: 'connect',
+      data: { host, port, username, password, privateKey: privateKey || null }
+    }));
+
+    fitAddon.fit();
+  }
+
+  function disconnect() {
+    if (ws) ws.send(JSON.stringify({ type: 'disconnect' }));
+  }
+
+  function setConnected(state) {
+    connected = state;
+    const badge = document.getElementById('statusBadge');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+
+    if (state) {
+      badge.textContent = '● Connected';
+      badge.className = 'status-badge connected';
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = '';
+    } else {
+      badge.textContent = '● Disconnected';
+      badge.className = 'status-badge';
+      connectBtn.style.display = '';
+      disconnectBtn.style.display = 'none';
+    }
+  }
+
+  // ── UI helpers ─────────────────────────────────────────
+  function switchAuth(type, btn) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('auth-password').style.display = type === 'password' ? '' : 'none';
+    document.getElementById('auth-key').style.display      = type === 'key'      ? '' : 'none';
+  }
+
+  function clearTerminal() {
+    term.clear();
+  }
+
+  function log(msg, isError = false) {
+    const panel = document.getElementById('log-panel');
+    panel.style.color = isError ? '#f85149' : '#8b949e';
+    panel.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  }
+
+  // ── Saved Sessions (localStorage) ─────────────────────
+  function getSessions() {
+    try { return JSON.parse(localStorage.getItem('ssh_sessions') || '[]'); } catch { return []; }
+  }
+
+  function saveSession(s) {
+    const sessions = getSessions().filter(x => x.name !== s.name);
+    sessions.unshift(s);
+    localStorage.setItem('ssh_sessions', JSON.stringify(sessions.slice(0, 20)));
+    renderSessions();
+  }
+
+  function deleteSession(name) {
+    const sessions = getSessions().filter(x => x.name !== name);
+    localStorage.setItem('ssh_sessions', JSON.stringify(sessions));
+    renderSessions();
+  }
+
+  function loadSession(s) {
+    document.getElementById('host').value     = s.host;
+    document.getElementById('port').value     = s.port || '22';
+    document.getElementById('username').value = s.username;
+    document.getElementById('sessionName').value = s.name;
+  }
+
+  function renderSessions() {
+    const list = document.getElementById('sessionsList');
+    const sessions = getSessions();
+    if (!sessions.length) {
+      list.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">Нет сохранённых сессий</p>';
+      return;
+    }
+    list.innerHTML = sessions.map(s => `
+      <div class="session-item" onclick="loadSession(${JSON.stringify(s).replace(/"/g,'&quot;')})">
+        <div class="session-dot"></div>
+        <div class="session-info">
+          <div class="session-name">${s.name}</div>
+          <div class="session-host">${s.username}@${s.host}</div>
+        </div>
+        <button class="session-del" onclick="event.stopPropagation();deleteSession('${s.name}')">✕</button>
+      </div>
+    `).join('');
+  }
+
+  renderSessions();
+</script>
+</body>
+</html>
