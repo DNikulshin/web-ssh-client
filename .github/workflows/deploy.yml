@@ -32,11 +32,8 @@ jobs:
         with:
           context: .
           push: true
-          # Здесь принудительно переводим весь тег в нижний регистр
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
-          # Эта настройка помогает избежать проблем с именами
-          labels: ${{ steps.meta.outputs.labels }}
+        # Прописываем путь вручную маленькими буквами
+          tags: ghcr.io/dnikulshin/web-ssh-client:latest
 
       - name: Clean up old images
         # Опционально: удаляет старые слои, чтобы не копились (бесплатный лимит GHCR — 500МБ)
