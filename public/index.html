@@ -24,6 +24,7 @@
       --text: #e6edf3;
       --text-muted: #8b949e;
       --radius: 8px;
+      --sidebar-w: 300px;
     }
 
     body {
@@ -75,13 +76,21 @@
       border-color: rgba(63,185,80,.4);
     }
 
-    .status-badge.error {
-      background: rgba(248,81,73,.15);
-      color: var(--red);
-      border-color: rgba(248,81,73,.4);
+    .header-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+    .btn-icon {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all .15s;
+      line-height: 1;
     }
 
-    .header-actions { margin-left: auto; display: flex; gap: 8px; }
+    .btn-icon:hover { color: var(--text); border-color: var(--accent); }
 
     /* ── Layout ── */
     .layout {
@@ -92,13 +101,23 @@
 
     /* ── Sidebar ── */
     .sidebar {
-      width: 300px;
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
       background: var(--surface);
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      flex-shrink: 0;
       overflow-y: auto;
+      overflow-x: hidden;
+      transition: width .25s ease, min-width .25s ease, opacity .2s ease;
+    }
+
+    .sidebar.collapsed {
+      width: 0;
+      min-width: 0;
+      opacity: 0;
+      overflow: hidden;
+      border-right: none;
     }
 
     .sidebar-section {
@@ -199,7 +218,6 @@
 
     .tab.active { background: var(--surface); color: var(--text); }
 
-    /* ── Saved Sessions ── */
     .session-item {
       display: flex;
       align-items: center;
@@ -244,6 +262,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      min-width: 0;
     }
 
     .terminal-toolbar {
@@ -268,39 +287,11 @@
       font-family: 'Courier New', monospace;
     }
 
-    .toolbar-right { margin-left: auto; display: flex; gap: 6px; }
-
-    .btn-icon {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--text-muted);
-      padding: 4px 8px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 12px;
-      transition: all .15s;
-    }
-
-    .btn-icon:hover { color: var(--text); border-color: var(--accent); }
-
     #terminal-container {
       flex: 1;
       padding: 6px;
       overflow: hidden;
     }
-
-    .empty-state {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      color: var(--text-muted);
-    }
-
-    .empty-state svg { opacity: .3; }
-    .empty-state p { font-size: 14px; }
 
     #log-panel {
       background: var(--surface);
@@ -330,6 +321,7 @@
   </div>
   <span class="status-badge" id="statusBadge">● Disconnected</span>
   <div class="header-actions">
+    <button class="btn-icon" id="sidebarToggleBtn" onclick="toggleSidebar()" title="Свернуть панель">◀ Panel</button>
     <button class="btn-icon" onclick="clearTerminal()" title="Очистить терминал">⌫ Clear</button>
   </div>
 </header>
@@ -337,8 +329,7 @@
 <div class="layout">
 
   <!-- ── SIDEBAR ── -->
-  <aside class="sidebar">
-
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-section">
       <h3>Подключение</h3>
 
@@ -378,19 +369,14 @@
         <input type="text" id="sessionName" placeholder="My Server" />
       </div>
 
-      <button class="btn btn-primary" id="connectBtn" onclick="connect()">
-        ⚡ Connect
-      </button>
-      <button class="btn btn-danger" id="disconnectBtn" onclick="disconnect()" style="margin-top:6px; display:none">
-        ✕ Disconnect
-      </button>
+      <button class="btn btn-primary" id="connectBtn" onclick="connect()">⚡ Connect</button>
+      <button class="btn btn-danger" id="disconnectBtn" onclick="disconnect()" style="margin-top:6px; display:none">✕ Disconnect</button>
     </div>
 
     <div class="sidebar-section" style="flex:1">
       <h3>Сохранённые сессии</h3>
       <div id="sessionsList"></div>
     </div>
-
   </aside>
 
   <!-- ── TERMINAL ── -->
@@ -403,7 +389,6 @@
       </div>
       <span class="terminal-title" id="termTitle">No connection</span>
     </div>
-
     <div id="terminal-container"></div>
     <div id="log-panel">Ready. Fill in connection details and press Connect.</div>
   </main>
@@ -411,6 +396,19 @@
 </div>
 
 <script>
+  // ── Sidebar toggle ─────────────────────────────────────
+  let sidebarCollapsed = false;
+
+  function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const btn = document.getElementById('sidebarToggleBtn');
+    sidebarCollapsed = !sidebarCollapsed;
+    sidebar.classList.toggle('collapsed', sidebarCollapsed);
+    btn.innerHTML = sidebarCollapsed ? '▶ Panel' : '◀ Panel';
+    btn.title = sidebarCollapsed ? 'Развернуть панель' : 'Свернуть панель';
+    setTimeout(() => fitAddon.fit(), 280);
+  }
+
   // ── xterm init ─────────────────────────────────────────
   const fitAddon = new FitAddon.FitAddon();
   const term = new Terminal({
@@ -455,18 +453,14 @@
 
   function initWS() {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${proto}://${location.host}`);
-
+    ws = new WebSocket(`${proto}://${location.host}/webssh`);
     ws.onopen = () => log('WebSocket ready');
-
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
-
       if (msg.type === 'output') {
         const bytes = Uint8Array.from(atob(msg.data.text), c => c.charCodeAt(0));
         term.write(bytes);
       }
-
       if (msg.type === 'status') {
         setConnected(msg.data.connected);
         log(msg.data.message);
@@ -477,21 +471,18 @@
           document.getElementById('termTitle').textContent = 'No connection';
         }
       }
-
       if (msg.type === 'error') {
         log('ERROR: ' + msg.data.message, true);
         term.writeln(`\r\n\x1b[31m✖ ${msg.data.message}\x1b[0m\r\n`);
         setConnected(false);
       }
     };
-
     ws.onclose = () => { setConnected(false); log('WebSocket closed'); };
     ws.onerror = () => log('WebSocket error', true);
   }
 
   initWS();
 
-  // Forward keystrokes to SSH
   term.onData((data) => {
     if (ws && ws.readyState === WebSocket.OPEN && connected) {
       ws.send(JSON.stringify({ type: 'input', data }));
@@ -500,28 +491,20 @@
 
   // ── Connect / Disconnect ───────────────────────────────
   function connect() {
-    const host     = document.getElementById('host').value.trim();
-    const port     = document.getElementById('port').value.trim();
-    const username = document.getElementById('username').value.trim();
-    const password = document.getElementById('password').value;
+    const host       = document.getElementById('host').value.trim();
+    const port       = document.getElementById('port').value.trim();
+    const username   = document.getElementById('username').value.trim();
+    const password   = document.getElementById('password').value;
     const privateKey = document.getElementById('privateKey').value.trim();
-    const name     = document.getElementById('sessionName').value.trim();
+    const name       = document.getElementById('sessionName').value.trim();
 
     if (!host || !username) { log('Host and username are required', true); return; }
-
     if (!ws || ws.readyState !== WebSocket.OPEN) initWS();
-
-    // Save session
     if (name) saveSession({ name, host, port, username });
 
     log(`Connecting to ${username}@${host}:${port}...`);
     term.writeln(`\r\n\x1b[90m▶ Connecting to ${username}@${host}:${port}...\x1b[0m`);
-
-    ws.send(JSON.stringify({
-      type: 'connect',
-      data: { host, port, username, password, privateKey: privateKey || null }
-    }));
-
+    ws.send(JSON.stringify({ type: 'connect', data: { host, port, username, password, privateKey: privateKey || null } }));
     fitAddon.fit();
   }
 
@@ -534,7 +517,6 @@
     const badge = document.getElementById('statusBadge');
     const connectBtn = document.getElementById('connectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
-
     if (state) {
       badge.textContent = '● Connected';
       badge.className = 'status-badge connected';
@@ -548,7 +530,6 @@
     }
   }
 
-  // ── UI helpers ─────────────────────────────────────────
   function switchAuth(type, btn) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
@@ -556,9 +537,7 @@
     document.getElementById('auth-key').style.display      = type === 'key'      ? '' : 'none';
   }
 
-  function clearTerminal() {
-    term.clear();
-  }
+  function clearTerminal() { term.clear(); }
 
   function log(msg, isError = false) {
     const panel = document.getElementById('log-panel');
@@ -566,7 +545,7 @@
     panel.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
   }
 
-  // ── Saved Sessions (localStorage) ─────────────────────
+  // ── Saved Sessions ─────────────────────────────────────
   function getSessions() {
     try { return JSON.parse(localStorage.getItem('ssh_sessions') || '[]'); } catch { return []; }
   }
@@ -585,9 +564,9 @@
   }
 
   function loadSession(s) {
-    document.getElementById('host').value     = s.host;
-    document.getElementById('port').value     = s.port || '22';
-    document.getElementById('username').value = s.username;
+    document.getElementById('host').value        = s.host;
+    document.getElementById('port').value        = s.port || '22';
+    document.getElementById('username').value    = s.username;
     document.getElementById('sessionName').value = s.name;
   }
 
@@ -613,4 +592,3 @@
   renderSessions();
 </script>
 </body>
-</html>
