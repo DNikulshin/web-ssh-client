@@ -1,33 +1,25 @@
-# --- Этап 1: Сборка (Builder) ---
+# --- Этап 1: Сборка ---
 FROM node:20-alpine AS builder
-
 WORKDIR /app
-
-# Копируем только файлы зависимостей для кэширования слоев
 COPY package*.json ./
-
-# Устанавливаем ВСЕ зависимости (включая typescript)
 RUN npm ci
-
-# Копируем исходники и собираем проект
 COPY . .
+# Собираем проект (результат должен попасть в /app/dist)
 RUN npm run build
 
-# --- Этап 2: Финальный образ (Runner) ---
+# --- Этап 2: Запуск ---
 FROM node:20-alpine AS runner
-
 WORKDIR /app
-
-# Копируем из первого этапа только то, что нужно для работы
-# 1. Скомпилированные файлы (обычно папка dist)
-COPY --from=builder /app/dist ./dist
-# 2. Package.json для запуска скриптов
-COPY --from=builder /app/package*.json ./
-# 3. Устанавливаем только production-зависимости (без тяжелого TS и тестов)
+# Копируем зависимости для работы
+COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Экспонируем порт (замените на ваш, если другой)
-EXPOSE 3000
+# Копируем скомпилированные файлы
+COPY --from=builder /app/dist ./dist
+# Копируем папку public (часто нужна для статики в рантайме)
+COPY --from=builder /app/public ./public
 
-# Команда запуска
+EXPOSE 3000
+# Проверьте в package.json, что делает команда start. 
+# Она должна запускать сервер, который отдает файлы из dist или public.
 CMD ["npm", "run", "start"]
