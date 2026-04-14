@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomeCodespaces — Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        h1 { font-size: 2rem; margin-bottom: 0.5rem; color: #58a6ff; }
+        p { color: #8b949e; margin-bottom: 2rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; width: 100%; max-width: 1000px; padding: 0 1rem; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 1.5rem; text-decoration: none; color: inherit; transition: border-color 0.2s, transform 0.2s; }
+        .card:hover { border-color: #58a6ff; transform: translateY(-2px); }
+        .card-icon { font-size: 2rem; margin-bottom: 0.75rem; }
+        .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem; color: #e6edf3; }
+        .card-desc { font-size: 0.85rem; color: #8b949e; }
+        .status { display: inline-block; width: 8px; height: 8px; background: #3fb950; border-radius: 50%; margin-right: 6px; }
+    </style>
+</head>
+<body>
+    <h1>🏠 HomeCodespaces</h1>
+    <p>Личная облачная среда разработки</p>
+    <div class="grid">
+        <a class="card" target="_blank" href="https://ssh.nikulshin-dev.online">
+            <div class="card-icon">💻</div>
+            <div class="card-title"><span class="status"></span>Web SSH</div>
+            <div class="card-desc">SSH клиент в браузере</div>
+        </a>
+        <a class="card" target="_blank" href="https://code.nikulshin-dev.online">
+            <div class="card-icon">🖥️</div>
+            <div class="card-title"><span class="status"></span>VS Code</div>
+            <div class="card-desc">Редактор кода в браузере</div>
+        </a>
+        <a class="card" target="_blank" href="https://portainer.nikulshin-dev.online">
+            <div class="card-icon">🐳</div>
+            <div class="card-title"><span class="status"></span>Portainer</div>
+            <div class="card-desc">Управление Docker контейнерами</div>
+        </a>
+        <a class="card" target="_blank" href="https://xui.nikulshin-dev.online">
+            <div class="card-icon">🔒</div>
+            <div class="card-title"><span class="status"></span>3x-UI</div>
+            <div class="card-desc">Управление VPN подключениями</div>
+        </a>
+    </div>
+</body>
+</html>
