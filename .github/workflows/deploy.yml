@@ -2,7 +2,7 @@ name: Build and Push to GHCR
 
 on:
   push:
-    branches: [ master ] # Срабатывает при пуше в ветку master
+    branches: [ main ] # Срабатывает при пуше в ветку main
 
 env:
   REGISTRY: ghcr.io
