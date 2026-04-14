@@ -2,11 +2,12 @@ name: Build and Push to GHCR
 
 on:
   push:
-    branches: [ main ] # Срабатывает при пуше в ветку main
+    branches: [ master ] # Срабатывает при пуше в ветку master
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Используем github.repository_owner, чтобы автоматически получить имя пользователя
+  IMAGE_NAME: web-ssh-client
 
 jobs:
   build:
@@ -31,4 +32,15 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          # Здесь принудительно переводим весь тег в нижний регистр
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+          # Эта настройка помогает избежать проблем с именами
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Clean up old images
+        # Опционально: удаляет старые слои, чтобы не копились (бесплатный лимит GHCR — 500МБ)
+        uses: actions/delete-package-versions@v4
+        with:
+          package-name: ${{ env.IMAGE_NAME }}
+          min-versions-to-keep: 3
