@@ -1,0 +1,16 @@
+name: Keep Alive WebSSH Client
+
+on:
+  schedule:
+    # Запуск каждые 14 минут, чтобы предотвратить засыпание Render (лимит 15 минут)
+    - cron: '*/14 * * * *'
+  # Позволяет запускать пинг вручную кнопкой в панели GitHub Actions
+  workflow_dispatch:
+
+jobs:
+  ping-service:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Keep-Alive Request
+        run: |
+          curl -sI https://web-ssh-client.onrender.com/ | head -n 1
