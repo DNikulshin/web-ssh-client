@@ -22,9 +22,10 @@ async function main(): Promise<void> {
     for (const r of reconciled) console.log(`[reconcile] ${r.id}: ${r.before} → ${r.after}`);
   }
 
-  const app = await buildServer({ db, vault });
+  const app = await buildServer({ db, vault, fakeSessions: config.fakeSessions });
   await app.listen({ host: config.host, port: config.port });
   console.log(`web-ssh слушает http://${config.host}:${config.port} (данные: ${config.dataDir})`);
+  if (config.fakeSessions) console.log('ВНИМАНИЕ: WEB_SSH_FAKE_SESSIONS=true — сессии без SSH, только для проверок');
 
   // Периодическая сверка: SIGKILL воркера не оставляет в БД вечно «active».
   const sweep = setInterval(() => {

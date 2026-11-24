@@ -34,6 +34,9 @@ export const config = {
   authSessionDays: envInt('WEB_SSH_AUTH_SESSION_DAYS', 30),
   // Пустой список = регистрация разрешена (первый запуск создаёт владельца).
   allowRegistration: env('WEB_SSH_ALLOW_REGISTRATION', 'true') === 'true',
+  // Только для проверок и демо: сессии поднимаются с эхо-транспортом вместо SSH,
+  // чтобы UI можно было прогнать без реальных хостов и кредов.
+  fakeSessions: env('WEB_SSH_FAKE_SESSIONS', 'false') === 'true',
   nodeEnv: env('NODE_ENV', 'development'),
 } as const;
 

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Web SSH v3 — скриншоты</title>
+<style>
+  body {
+    margin: 0; padding: 28px 20px 60px;
+    background: #07090c; color: #e6edf3;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 18px; font-weight: 650; margin: 0 0 6px; }
+  p { color: #8b949e; font-size: 13px; line-height: 1.6; margin: 0 0 22px; max-width: 80ch; }
+  .row { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  figure { margin: 0; }
+  figcaption { color: #6e7681; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+  img { display: block; border: 1px solid #30363d; border-radius: 10px; max-width: 100%; height: auto; }
+  .wide img { width: min(1100px, 92vw); }
+  .narrow img { width: min(390px, 92vw); }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #58a6ff; }
+</style>
+</head>
+<body>
+  <h1>Web SSH v3 — как это выглядит</h1>
+  <p>
+    Снято с работающего сервиса в фейковом режиме (<code>WEB_SSH_FAKE_SESSIONS=true</code>), поэтому
+    в терминале <code>[fake] tick N</code>: это настоящий xterm через настоящий WebSocket и SQLite,
+    просто вместо SSH — эхо-транспорт. Две сессии к одному хосту, статус-бар показывает размер pty
+    и <code>hist N</code> — до какого чанка восстановлена история из БД.
+  </p>
+  <div class="row">
+    <figure class="wide">
+      <figcaption>Desktop · 1440×900</figcaption>
+      <img src="desktop-1440.png" alt="Web SSH на десктопе: рельс сессий, две вкладки-консоли, статус-бар" />
+    </figure>
+    <figure class="narrow">
+      <figcaption>Mobile · 390×844</figcaption>
+      <img src="mobile-390.png" alt="Web SSH на телефоне: вкладки, терминал, панель клавиш" />
+    </figure>
+  </div>
+</body>
+</html>

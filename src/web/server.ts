@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { config } from '../config.ts';
 import { allRows, getRow, newId, now, type Db } from '../db/index.ts';
 import { createVault, type Vault } from '../vault.ts';
-import { FrameDecoder, encodeFrame, FRAME_CONTROL, FRAME_IN, FRAME_OUT } from '../proto/frames.ts';
+import { FrameDecoder, encodeControl, encodeFrame, FRAME_CONTROL, FRAME_IN, FRAME_OUT } from '../proto/frames.ts';
 import {
   HttpError,
   checkLogin,
@@ -66,9 +66,27 @@ export async function buildServer(deps: ServerDeps) {
   const { db, vault } = deps;
   const app = Fastify({ logger: false, trustProxy: config.trustProxy });
   await app.register(cookie);
+  const root = deps.publicDir ?? resolve(import.meta.dirname, '../../public');
+  await app.register(fastifyStatic, { root, index: ['index.html'] });
+
+  // xterm отдаётся из node_modules, а не с CDN: терминал обязан работать, когда внешняя
+  // сеть недоступна или CDN отвечает 502, иначе «сервис жив, а консоль белая».
+  const vendor = resolve(root, '../node_modules');
   await app.register(fastifyStatic, {
-    root: deps.publicDir ?? resolve(import.meta.dirname, '../../public'),
-    index: ['index.html'],
+    root: resolve(vendor, '@xterm/xterm'),
+    prefix: '/vendor/xterm/',
+    decorateReply: false,
+    index: false,
+    cacheControl: true,
+    maxAge: '7d',
+  });
+  await app.register(fastifyStatic, {
+    root: resolve(vendor, '@xterm/addon-fit'),
+    prefix: '/vendor/addon-fit/',
+    decorateReply: false,
+    index: false,
+    cacheControl: true,
+    maxAge: '7d',
   });
 
   app.setErrorHandler((err, _req, reply) => {
@@ -281,6 +299,14 @@ export async function buildServer(deps: ServerDeps) {
       );
       if (!host) throw new HttpError(404, 'хост не найден');
       const id = newId();
+      // Заголовок по умолчанию — метка хоста с номером: у мультиконсоли две вкладки
+      // «root@127.0.0.1» неразличимы, а «prod #1 / prod #2» — да.
+      const openOnHost = allRows<{ n: number }>(
+        db,
+        `SELECT COUNT(*) AS n FROM sessions WHERE host_id = ? AND status IN ('starting','active','detached')`,
+        hostId,
+      )[0]?.n ?? 0;
+      const fallbackTitle = openOnHost > 0 ? `${host.label} #${openOnHost + 1}` : host.label;
       db.prepare(
         `INSERT INTO sessions (id, user_id, host_id, title, status, rows, cols, created_at)
          VALUES (?, ?, ?, ?, 'starting', ?, ?, ?)`,
@@ -288,7 +314,7 @@ export async function buildServer(deps: ServerDeps) {
         id,
         user.id,
         hostId,
-        title?.trim() || `${host.username}@${host.host}`,
+        title?.trim() || fallbackTitle,
         req.body?.rows ?? 24,
         req.body?.cols ?? 80,
         now(),
@@ -324,14 +350,28 @@ export async function buildServer(deps: ServerDeps) {
       if (!row) throw new HttpError(404, 'сессия не найдена');
       const from = Number(req.query.from ?? 0);
       const limit = Math.min(Number(req.query.limit ?? 500), 5000);
-      const chunks = allRows<{ seq: number; ts: number; data: Buffer }>(
-        db,
-        `SELECT seq, ts, data FROM session_chunks
-         WHERE session_id = ? AND dir = 'out' AND seq > ? ORDER BY seq ASC LIMIT ?`,
-        req.params.id,
-        Number.isFinite(from) ? from : 0,
-        limit,
-      );
+      // from=0 — это «дай историю для восстановления экрана», и нужны последние чанки,
+      // а не первые: у сессии с 50 000 чанков первые уже неактуальны, а после ретенции
+      // их и вовсе нет. Остальные запросы — честная пагинация вперёд по seq.
+      const chunks =
+        !Number.isFinite(from) || from <= 0
+          ? allRows<{ seq: number; ts: number; data: Buffer }>(
+              db,
+              `SELECT seq, ts, data FROM (
+                 SELECT seq, ts, data FROM session_chunks
+                 WHERE session_id = ? AND dir = 'out' ORDER BY seq DESC LIMIT ?
+               ) ORDER BY seq ASC`,
+              req.params.id,
+              limit,
+            )
+          : allRows<{ seq: number; ts: number; data: Buffer }>(
+              db,
+              `SELECT seq, ts, data FROM session_chunks
+               WHERE session_id = ? AND dir = 'out' AND seq > ? ORDER BY seq ASC LIMIT ?`,
+              req.params.id,
+              from,
+              limit,
+            );
       return {
         chunks: chunks.map((c) => ({ seq: c.seq, ts: c.ts, data: Buffer.from(c.data).toString('base64') })),
       };
@@ -400,9 +440,6 @@ export async function buildServer(deps: ServerDeps) {
     const worker = net.connect(ctx.socketPath);
     const decoder = new FrameDecoder();
 
-    worker.on('connect', () => {
-      ws.send(JSON.stringify({ t: 'proxy.connected', sessionId: ctx.sessionId }));
-    });
     worker.on('data', (chunk) => {
       // Перекадрируем на границы ws-сообщений: браузер получает ровно один кадр на сообщение.
       let frames;
@@ -417,7 +454,9 @@ export async function buildServer(deps: ServerDeps) {
       }
     });
     worker.on('error', () => {
-      ws.send(JSON.stringify({ t: 'error', message: 'воркер сессии недоступен' }));
+      // Только кадры: клиент разбирает поток одним декодером, и «сырой» JSON посреди
+      // бинарных кадров он примет за начало кадра — консоль после этого мертва.
+      ws.send(encodeControl({ t: 'error', message: 'воркер сессии недоступен' }));
       ws.close(1011, 'worker unavailable');
     });
     worker.on('close', () => ws.close(1000, 'worker closed'));

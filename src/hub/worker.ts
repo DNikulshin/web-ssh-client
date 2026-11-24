@@ -375,11 +375,12 @@ const server = net.createServer((socket) => {
     clients.delete(client);
   });
   socket.on('close', () => {
-    const wasAttached = client.attached;
     clients.delete(client);
-    if (wasAttached && attachedCount() === 0 && status === 'active') {
-      // Никого не осталось — сессия живёт дальше, но факт надо записать:
-      // иначе после перезагрузки нельзя отличить «ушли» от «воркер умер».
+    // Никого не осталось — сессия живёт дальше, но факт надо записать: иначе после
+    // перезагрузки нельзя отличить «ушли» от «воркер умер». Условие не включает
+    // «был ли attached»: клиент со штатным detach закрывает сокет уже отцепленным,
+    // а статус обязан стать detached в обоих случаях.
+    if (attachedCount() === 0 && status === 'active') {
       db.prepare('UPDATE sessions SET status = ?, attached_at = ? WHERE id = ?').run('detached', now(), sessionId);
       status = 'detached';
     }

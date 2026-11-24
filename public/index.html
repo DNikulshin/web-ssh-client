@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#0d1117" />
+<title>Web SSH</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%2358a6ff%27 stroke-width=%272%27%3E%3Crect x=%272%27 y=%274%27 width=%2720%27 height=%2716%27 rx=%272%27/%3E%3Cpath d=%27M6 9l3 3-3 3M12 15h6%27/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/vendor/xterm/css/xterm.css" />
+<link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+
+<!-- ── Вход ─────────────────────────────────────────────────────────────── -->
+<section id="auth" class="screen auth hidden">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 9l3 3-3 3M12 15h6"/></svg>
+      <span>Web SSH</span>
+    </div>
+    <h1 id="auth-title">Вход</h1>
+    <p class="sub" id="auth-sub">Веб-терминал с сессиями, которые переживают перезапуск сервиса.</p>
+    <p class="notice hidden" id="auth-notice"></p>
+    <form id="form-auth" autocomplete="on">
+      <input id="auth-login" name="login" placeholder="логин" autocomplete="username" required />
+      <input id="auth-password" name="password" type="password" placeholder="пароль" autocomplete="current-password" required />
+      <button id="auth-submit" type="submit">Войти</button>
+    </form>
+    <p class="error" id="auth-error"></p>
+  </div>
+</section>
+
+<!-- ── Приложение ───────────────────────────────────────────────────────── -->
+<section id="app" class="screen app hidden">
+  <header class="topbar">
+    <button id="btn-rail" class="icon-btn only-mobile" title="Сессии и хосты">☰</button>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 9l3 3-3 3M12 15h6"/></svg>
+      <span>Web SSH</span>
+    </div>
+    <span class="chip"><i class="dot" id="conn-dot"></i><span id="conn-text">—</span></span>
+    <div class="right">
+      <button id="btn-settings" class="icon-btn" title="Хосты и креды">⚙</button>
+      <button id="btn-logout" class="icon-btn" title="Выйти">⏻</button>
+    </div>
+  </header>
+
+  <aside class="rail" id="rail">
+    <div class="rail-scroll">
+      <section>
+        <h2>Сессии</h2>
+        <div id="list-sessions"></div>
+      </section>
+      <section>
+        <h2>Хосты</h2>
+        <div id="list-hosts"></div>
+      </section>
+    </div>
+    <button id="btn-new" class="rail-new">+ Новая консоль</button>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <main class="main">
+    <div class="tabs" id="tabs"></div>
+    <div class="terminals" id="terminals"></div>
+    <!-- Панель клавиш: на телефоне нет Ctrl/Alt/Tab/Esc и стрелок. Байты шлём готовыми. -->
+    <div class="keybar only-mobile" id="keybar">
+      <button data-seq="&quot;\u001b&quot;" title="Esc">Esc</button>
+      <button data-seq="&quot;\t&quot;" title="Tab">Tab</button>
+      <button data-seq="&quot;\u0003&quot;" title="Ctrl+C">^C</button>
+      <button data-seq="&quot;\u0004&quot;" title="Ctrl+D">^D</button>
+      <button data-seq="&quot;\u001a&quot;" title="Ctrl+Z">^Z</button>
+      <button data-seq="&quot;\u001b[A&quot;" title="Вверх">↑</button>
+      <button data-seq="&quot;\u001b[B&quot;" title="Вниз">↓</button>
+      <button data-seq="&quot;\u001b[D&quot;" title="Влево">←</button>
+      <button data-seq="&quot;\u001b[C&quot;" title="Вправо">→</button>
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <i class="dot" id="conn-dot-status"></i>
+    <span class="grow" id="status-host">—</span>
+    <span class="sep"></span>
+    <span id="status-size">—</span>
+    <span class="sep"></span>
+    <span id="status-seq">—</span>
+    <span class="sep"></span>
+    <span id="status-mode">—</span>
+  </footer>
+</section>
+
+<!-- ── Настройки ───────────────────────────────────────────────────────── -->
+<div id="settings" class="overlay hidden">
+  <div class="sheet">
+    <header>
+      <h2>Хосты и креды</h2>
+      <button id="btn-close-settings" class="icon-btn sheet-close" title="Закрыть">✕</button>
+    </header>
+
+    <section>
+      <h3>Креды (шифруются на сервере, обратно не отдаются)</h3>
+      <form id="form-credential">
+        <div class="grid-2">
+          <div class="field">
+            <label for="cred-label">Метка</label>
+            <input id="cred-label" placeholder="vps-root" required />
+          </div>
+          <div class="field">
+            <label for="cred-kind">Тип</label>
+            <select id="cred-kind">
+              <option value="password">пароль</option>
+              <option value="key">приватный ключ</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="cred-secret">Секрет (вставляется из буфера, в БД уходит шифротекстом)</label>
+          <textarea id="cred-secret" placeholder="пароль или -----BEGIN OPENSSH PRIVATE KEY-----" required></textarea>
+        </div>
+        <div class="field">
+          <label for="cred-passphrase">Парольная фраза ключа (если есть)</label>
+          <input id="cred-passphrase" type="password" autocomplete="off" />
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" type="submit">Сохранить кред</button>
+          <span class="hint">AES-256-GCM, ключ вне БД</span>
+        </div>
+      </form>
+      <div id="cred-list"></div>
+    </section>
+
+    <section>
+      <h3>Хосты</h3>
+      <form id="form-host">
+        <div class="grid-2">
+          <div class="field">
+            <label for="host-label">Метка</label>
+            <input id="host-label" placeholder="prod-db-01" required />
+          </div>
+          <div class="field">
+            <label for="host-address">Адрес</label>
+            <input id="host-address" placeholder="10.0.0.14 или host.example.com" required />
+          </div>
+          <div class="field">
+            <label for="host-port">Порт</label>
+            <input id="host-port" type="number" value="22" min="1" max="65535" />
+          </div>
+          <div class="field">
+            <label for="host-user">Пользователь</label>
+            <input id="host-user" placeholder="root" required />
+          </div>
+        </div>
+        <div class="field">
+          <label for="host-credential">Креды</label>
+          <select id="host-credential"></select>
+        </div>
+        <div class="field">
+          <label for="host-note">Заметка</label>
+          <input id="host-note" placeholder="необязательно" />
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" type="submit">Добавить хост</button>
+        </div>
+      </form>
+      <div id="host-list"></div>
+    </section>
+  </div>
+</div>
+
+<div id="toasts"></div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
