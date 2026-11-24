@@ -67,4 +67,5 @@ WEB_SSH_FAKE_SESSIONS=true WEB_SSH_DATA_DIR=/tmp/wssh-demo node src/index.ts
 | `docs/ARCHITECTURE.md` | процессы, протокол кадров, схема БД, отказоустойчивость по уровням |
 | `docs/decisions.md` | ADR: почему SQLite, почему AES-GCM и файл ключа, что осознанно не сделано |
 | `docs/testing.md` | что и как проверяется, как воспроизвести тест на выживание |
+| `docs/handoff.md` | состояние работы: что подтверждено, что осталось, открытые вопросы |
 | `AGENTS.md` | инварианты для агента и человека, команды проверок |
