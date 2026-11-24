@@ -36,6 +36,7 @@ node --watch src/index.ts     # http://127.0.0.1:3000
 ```
 
 Первый вход — регистрация владельца: пока в БД нет пользователей, форма регистрации открыта.
+Как этим пользоваться после входа — `docs/usage.md`.
 
 ```bash
 node tools/verify.mjs         # типы + тесты
@@ -67,6 +68,7 @@ WEB_SSH_FAKE_SESSIONS=true WEB_SSH_DATA_DIR=/tmp/wssh-demo node src/index.ts
 | файл | о чём |
 | --- | --- |
 | `docs/ARCHITECTURE.md` | процессы, протокол кадров, схема БД, отказоустойчивость по уровням |
+| `docs/usage.md` | инструкция для пользователя: вход, креды и ключи, хосты, консоли, разбор ошибок, отзыв доступа |
 | `docs/decisions.md` | ADR: почему SQLite, почему AES-GCM и файл ключа, что осознанно не сделано |
 | `docs/testing.md` | что и как проверяется, как воспроизвести тест на выживание |
 | `docs/deploy.md` | установка на хост: `deploy/make-release.sh` + `deploy/install-host.sh`, nginx, первый вход |
