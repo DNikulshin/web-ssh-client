@@ -14,7 +14,8 @@ ExecStart=/usr/bin/node /opt/web-ssh/dist/index.js
 
 # Ключевой пункт: KillMode=process шлёт SIGTERM только главному процессу.
 # Дефолтный control-group вместе с веб-слоем убил бы воркеры сессий — то есть ровно то,
-# ради чего сервис разделён на процессы. Сессии должны пережить restart/deploy.
+# ради чего сервис разделён на процессы. Сессии должны пережить restart/deploy:
+# `systemctl restart web-ssh` обязан оставить ssh-соединения живыми.
 KillMode=process
 TimeoutStopSec=20
 
@@ -25,9 +26,11 @@ RestartSec=2
 LimitNOFILE=65536
 
 # Права: писать можно только в /var/lib/web-ssh (БД, мастер-ключ, сокеты сессий).
+# /opt/web-ssh принадлежит root — обновление кода не может быть подменено самим сервисом.
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+PrivateDevices=yes
 NoNewPrivileges=yes
 ReadWritePaths=/var/lib/web-ssh
 StateDirectory=web-ssh
