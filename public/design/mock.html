@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Web SSH v3 — макет интерфейса</title>
+<style>
+  /* ── Токены. Палитра продолжает текущую систему (GitHub-dark), меняется иерархия:
+        рельс уже, статусы цветные, плотность выше — инструмент, а не дашборд. ── */
+  :root {
+    --bg: #0d1117;
+    --surface: #10151c;
+    --surface-2: #161b22;
+    --surface-3: #1c232c;
+    --border: #242c37;
+    --border-strong: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --faint: #6e7681;
+    --accent: #58a6ff;
+    --accent-dim: rgba(88,166,255,.12);
+    --green: #3fb950;
+    --amber: #d29922;
+    --red: #f85149;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    --r: 8px;
+    --r-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #07090c;
+    color: var(--text);
+    font-family: var(--sans);
+    padding: 32px 24px 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    align-items: center;
+  }
+  .board-head { width: 100%; max-width: 1480px; }
+  .board-head h1 { font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+  .board-head p { color: var(--muted); font-size: 13px; margin-top: 6px; line-height: 1.6; max-width: 78ch; }
+  .board-head code { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .deck { display: flex; gap: 32px; align-items: flex-start; width: 100%; max-width: 1480px; flex-wrap: wrap; }
+  .frame-wrap { display: flex; flex-direction: column; gap: 10px; }
+  .frame-label { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--faint); }
+  .frame-label b { color: var(--muted); font-weight: 600; }
+
+  /* ── Общая оболочка приложения ── */
+  .app {
+    display: grid;
+    grid-template-columns: 236px 1fr;
+    grid-template-rows: 44px 1fr 26px;
+    grid-template-areas: "brand topbar" "rail main" "rail status";
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55);
+  }
+  .desktop { width: 940px; height: 560px; }
+
+  /* Рельс */
+  .brand {
+    grid-area: brand;
+    display: flex; align-items: center; gap: 9px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .brand svg { width: 17px; height: 17px; color: var(--accent); }
+  .brand span { font-size: 13px; font-weight: 650; letter-spacing: -.01em; }
+  .brand .ver { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-left: auto; }
+
+  .rail {
+    grid-area: rail;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  .rail-scroll { overflow: auto; padding: 10px 8px 14px; display: flex; flex-direction: column; gap: 18px; }
+  .rail h2 {
+    font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--faint); font-weight: 650; padding: 0 6px 6px;
+  }
+  .rail-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 8px; border-radius: 7px; cursor: pointer;
+    font-size: 12.5px; color: var(--muted);
+    transition: background .12s, color .12s;
+  }
+  .rail-item:hover { background: var(--surface-2); color: var(--text); }
+  .rail-item.active { background: var(--accent-dim); color: var(--text); box-shadow: inset 0 0 0 1px rgba(88,166,255,.25); }
+  .rail-item .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .dot.alive { background: var(--green); box-shadow: 0 0 0 3px rgba(63,185,80,.13); }
+  .dot.detached { background: var(--amber); box-shadow: 0 0 0 3px rgba(210,153,34,.13); }
+  .dot.lost { background: var(--red); box-shadow: 0 0 0 3px rgba(248,81,73,.13); }
+  .dot.idle { background: var(--faint); }
+  .rail-item .meta { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--faint); }
+  .rail-new {
+    margin: 0 8px 12px; padding: 8px; border-radius: 7px;
+    border: 1px dashed var(--border-strong); background: transparent;
+    color: var(--muted); font-size: 12px; font-family: var(--sans); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .rail-new:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* Верхняя панель */
+  .topbar {
+    grid-area: topbar;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .crumb { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .crumb b { color: var(--text); font-weight: 550; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; padding: 3px 8px; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--muted);
+  }
+  .chip.alive { color: var(--green); border-color: rgba(63,185,80,.35); background: rgba(63,185,80,.08); }
+  .topbar .right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .icon-btn {
+    width: 28px; height: 26px; border-radius: 6px; border: 1px solid var(--border-strong);
+    background: var(--surface-2); color: var(--muted); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
+  }
+  .icon-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* Основная область */
+  .main { grid-area: main; display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+  .tabs {
+    display: flex; align-items: stretch; gap: 2px; padding: 6px 8px 0;
+    border-bottom: 1px solid var(--border); background: var(--surface); overflow-x: auto;
+  }
+  .tab {
+    display: flex; align-items: center; gap: 7px;
+    padding: 6px 10px 7px; border-radius: 7px 7px 0 0;
+    font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap;
+    border: 1px solid transparent; border-bottom: none;
+  }
+  .tab:hover { background: var(--surface-2); color: var(--text); }
+  .tab.active {
+    background: var(--bg); color: var(--text);
+    border-color: var(--border-strong);
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+  .tab .close { color: var(--faint); font-size: 13px; line-height: 1; }
+  .tab.active .close:hover { color: var(--red); }
+  .tab.add { color: var(--faint); font-size: 15px; padding: 6px 10px; }
+
+  .term {
+    flex: 1; overflow: hidden; padding: 12px 14px 18px;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+    color: #c9d1d9; background: var(--bg);
+  }
+  .term .p { color: var(--green); }
+  .term .u { color: var(--accent); }
+  .term .dim { color: var(--faint); }
+  .term .warn { color: var(--amber); }
+  .term .err { color: var(--red); }
+  .term .cursor {
+    display: inline-block; width: 7px; height: 14px; vertical-align: -2px;
+    background: #c9d1d9; animation: blink 1.1s steps(2, start) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .statusbar {
+    grid-area: status;
+    display: flex; align-items: center; gap: 14px;
+    padding: 0 12px; border-top: 1px solid var(--border);
+    background: var(--surface); font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+  }
+  .statusbar .sep { width: 1px; height: 12px; background: var(--border-strong); }
+  .statusbar .ok { color: var(--green); }
+  .statusbar .right { margin-left: auto; display: flex; gap: 12px; }
+
+  /* ── Мобильный кадр ── */
+  .phone {
+    width: 392px; height: 700px;
+    border-radius: 28px; border: 1px solid var(--border-strong);
+    overflow: hidden; position: relative;
+    box-shadow: 0 24px 60px rgba(0,0,0,.6);
+    background: var(--bg);
+  }
+  .phone .app {
+    width: 100%; height: 100%; border: none; border-radius: 0; box-shadow: none;
+    grid-template-columns: 1fr;
+    grid-template-rows: 48px 1fr 40px;
+    grid-template-areas: "topbar" "main" "status";
+  }
+  .phone .main { position: relative; }
+  /* На телефоне терминал — главный экран; рельс уезжает в drawer по кнопке. */
+  .phone .drawer {
+    position: absolute; inset: 0; display: flex; pointer-events: none;
+  }
+  .phone .drawer .rail {
+    width: 268px; height: 100%; border-right: 1px solid var(--border-strong);
+    transform: translateX(-100%); transition: transform .22s ease;
+    box-shadow: 24px 0 40px rgba(0,0,0,.5);
+    padding-top: env(safe-area-inset-top);
+  }
+  .phone .drawer.open { pointer-events: auto; }
+  .phone .drawer.open .rail { transform: translateX(0); }
+  .phone .scrim {
+    position: absolute; inset: 0; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .22s;
+  }
+  .phone .drawer.open .scrim { opacity: 1; }
+  .phone .topbar { padding: 0 10px; padding-top: env(safe-area-inset-top); height: 48px; }
+  .phone .icon-btn { width: 34px; height: 32px; }
+  .phone .tabs { padding-top: 4px; }
+  .phone .tab { padding: 8px 11px; font-size: 12.5px; }
+  .phone .term {
+    font-size: 12px; padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+    /* На телефоне перенос длинных строк вместо горизонтальной прокрутки —
+       читаемо, но честно: для широких выводов есть поворот экрана. */
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .phone .statusbar { padding: 0 12px calc(env(safe-area-inset-bottom)); height: 40px; }
+  /* Панель быстрых клавиш над статус-баром: Ctrl/C/V, Tab, стрелки — то, чего нет на телефоне. */
+  .keybar {
+    display: flex; gap: 6px; padding: 6px 10px; overflow-x: auto;
+    border-top: 1px solid var(--border); background: var(--surface-2);
+  }
+  .keybar button {
+    flex: none; min-width: 44px; height: 34px; padding: 0 10px;
+    border-radius: 7px; border: 1px solid var(--border-strong);
+    background: var(--surface-3); color: var(--text);
+    font-family: var(--mono); font-size: 12px; cursor: pointer;
+  }
+  .keybar button:active { background: var(--accent-dim); border-color: var(--accent); }
+  .phone .navdots { display: flex; gap: 8px; align-items: center; }
+  .phone .hint {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: 96px; font-size: 10px; color: var(--faint); font-family: var(--mono);
+  }
+
+  .notes { width: 100%; max-width: 1480px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .note { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; }
+  .note h3 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .note ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .note li { font-size: 12.5px; color: var(--muted); line-height: 1.55; padding-left: 14px; position: relative; }
+  .note li::before { content: "—"; position: absolute; left: 0; color: var(--faint); }
+  .note b { color: var(--text); font-weight: 550; }
+</style>
+</head>
+<body>
+
+<div class="board-head">
+  <h1>Web SSH v3 — макет интерфейса</h1>
+  <p>
+    Палитра продолжает текущую систему: <code>#0d1117</code> фон, <code>#58a6ff</code> акцент, зелёный/янтарный/красный на статусах.
+    Меняется иерархия: рельс 236&nbsp;px со списком сессий, вкладки = мультиконсоль, статус-бар с фактами
+    (хост, размер терминала, seq истории). На телефоне рельс уезжает в drawer, а над клавиатурой появляется
+    панель клавиш, которых нет на мобильном.
+  </p>
+</div>
+
+<div class="deck">
+
+  <!-- ── Desktop ── -->
+  <div class="frame-wrap">
+    <div class="frame-label"><b>Desktop</b> · 1440+</div>
+    <div class="app desktop">
+      <div class="brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 9l3 3-3 3M12 15h6"/></svg>
+        <span>Web SSH</span>
+        <span class="ver">v3</span>
+      </div>
+
+      <div class="rail">
+        <div class="rail-scroll">
+          <div>
+            <h2>Сессии</h2>
+            <div class="rail-item active"><i class="dot alive"></i> prod-db-01 <span class="meta">12</span></div>
+            <div class="rail-item"><i class="dot alive"></i> staging-web <span class="meta">08</span></div>
+            <div class="rail-item"><i class="dot detached"></i> homeserver <span class="meta">∞</span></div>
+            <div class="rail-item"><i class="dot lost"></i> old-vps <span class="meta">—</span></div>
+          </div>
+          <div>
+            <h2>Хосты</h2>
+            <div class="rail-item"><i class="dot idle"></i> 10.0.0.14 · root</div>
+            <div class="rail-item"><i class="dot idle"></i> strizhlab.ru · deploy</div>
+            <div class="rail-item"><i class="dot idle"></i> vps-hetzner · dev</div>
+          </div>
+        </div>
+        <button class="rail-new">+ Новая консоль</button>
+      </div>
+
+      <div class="topbar">
+        <span class="crumb"><b>root</b>@prod-db-01:~</span>
+        <span class="chip alive"><i class="dot alive"></i> connected</span>
+        <div class="right">
+          <button class="icon-btn" title="Разделить экран">◫</button>
+          <button class="icon-btn" title="История">⌕</button>
+          <button class="icon-btn" title="Настройки">⚙</button>
+        </div>
+      </div>
+
+      <div class="main">
+        <div class="tabs">
+          <div class="tab active"><i class="dot alive"></i> prod-db-01 <span class="close">✕</span></div>
+          <div class="tab"><i class="dot alive"></i> staging-web <span class="close">✕</span></div>
+          <div class="tab"><i class="dot detached"></i> homeserver <span class="close">✕</span></div>
+          <div class="tab add">+</div>
+        </div>
+        <div class="term">
+<span class="dim">Last login: Mon Nov 24 06:02:11 2026 from 10.0.0.2</span>
+<span class="p">root@prod-db-01</span>:<span class="u">~</span>$ systemctl status postgresql --no-pager
+<span class="dim">● postgresql.service - PostgreSQL RDBMS</span>
+     Loaded: loaded (/lib/systemd/system/postgresql.service; enabled)
+     Active: <span class="p">active (exited)</span> since Mon 2026-11-24 05:58:02 MSK
+<span class="p">root@prod-db-01</span>:<span class="u">~</span>$ df -h /var/lib/postgresql
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        79G   52G   24G  69% /var/lib/postgresql
+<span class="p">root@prod-db-01</span>:<span class="u">~</span>$ <span class="cursor"></span>
+        </div>
+      </div>
+
+      <div class="statusbar">
+        <span class="ok">● attached</span>
+        <span class="sep"></span>
+        <span>10.0.0.14:22</span>
+        <span class="sep"></span>
+        <span>120×40</span>
+        <span class="sep"></span>
+        <span>history seq 1842</span>
+        <span class="right">
+          <span>UTF-8</span>
+          <span>scrypt·AES-256-GCM</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Mobile ── -->
+  <div class="frame-wrap">
+    <div class="frame-label"><b>Mobile</b> · 360–430</div>
+    <div class="phone">
+      <div class="app">
+        <div class="topbar">
+          <button class="icon-btn">☰</button>
+          <span class="crumb"><b>prod-db-01</b></span>
+          <span class="chip alive" style="padding:2px 7px"><i class="dot alive"></i></span>
+          <div class="right"><button class="icon-btn">≣</button></div>
+        </div>
+
+        <div class="main">
+          <div class="tabs">
+            <div class="tab active"><i class="dot alive"></i> prod-db-01</div>
+            <div class="tab"><i class="dot detached"></i> home</div>
+            <div class="tab add">+</div>
+          </div>
+          <div class="term">
+<span class="dim">Last login: Mon Nov 24 06:02:11 2026</span>
+<span class="p">root@prod-db-01</span>:<span class="u">~</span>$ tail -f /var/log/nginx/error.log
+<span class="warn">2026/11/24 06:03:14 [warn] 812#812: *4421 an upstream response is buffered</span>
+<span class="err">2026/11/24 06:03:19 [error] 812#812: *4427 connect() failed</span>
+<span class="p">root@prod-db-01</span>:<span class="u">~</span>$ <span class="cursor"></span>
+          </div>
+          <div class="drawer" id="drawer">
+            <div class="scrim" onclick="document.getElementById('drawer').classList.remove('open')"></div>
+            <div class="rail">
+              <div class="rail-scroll">
+                <div>
+                  <h2>Сессии</h2>
+                  <div class="rail-item active"><i class="dot alive"></i> prod-db-01</div>
+                  <div class="rail-item"><i class="dot detached"></i> homeserver</div>
+                  <div class="rail-item"><i class="dot lost"></i> old-vps</div>
+                </div>
+                <div>
+                  <h2>Хосты</h2>
+                  <div class="rail-item"><i class="dot idle"></i> 10.0.0.14 · root</div>
+                  <div class="rail-item"><i class="dot idle"></i> strizhlab.ru · deploy</div>
+                </div>
+              </div>
+              <button class="rail-new">+ Новая консоль</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="keybar">
+          <button>Ctrl</button><button>Alt</button><button>Tab</button><button>Esc</button>
+          <button>↑</button><button>↓</button><button>←</button><button>→</button><button>⌨</button>
+        </div>
+
+        <div class="statusbar">
+          <span class="ok">● attached</span>
+          <span>80×24</span>
+          <span class="right"><span>seq 1842</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="notes">
+  <div class="note">
+    <h3>Что решается этим макетом</h3>
+    <ul>
+      <li><b>Мультиконсоль</b> — вкладки в один ряд, каждая с собственным статусом; рельс и вкладки не дублируют друг друга (рельс — все сессии, вкладки — открытые).</li>
+      <li><b>Статус = факт</b>: <span style="color:#3fb950">alive</span> / <span style="color:#d29922">detached</span> / <span style="color:#f85149">lost</span>. Потерянную сессию видно, а не приходится угадывать по тишине.</li>
+      <li><b>История снаружи:</b> в статус-баре <span style="font-family:var(--mono)">seq</span> — то место, до которого сервер уже записал вывод. Обновление страницы восстанавливает экран отсюда.</li>
+    </ul>
+  </div>
+  <div class="note">
+    <h3>Мобильный адаптив</h3>
+    <ul>
+      <li>Терминал — единственный главный экран; навигация в drawer, не в постоянной панели.</li>
+      <li><b>Панель клавиш</b> (Ctrl/Alt/Tab/Esc/стрелки) — то, чего нет в мобильной клавиатуре; кнопки ≥ 44 px.</li>
+      <li>Перенос строк вместо горизонтальной прокрутки; safe-area для «челюсти» iPhone.</li>
+      <li>Мультиконсоль на телефоне — свайп между вкладками, полный список — в drawer.</li>
+    </ul>
+  </div>
+  <div class="note">
+    <h3>Открытые вопросы к тебе</h3>
+    <ul>
+      <li>Палитра: оставляем GitHub-dark как есть или уводим в более тёплый графит?</li>
+      <li>Плотность: 12.5 px терминал как здесь или крупнее (13.5) для чтения с телефона?</li>
+      <li>Делить экран (две консоли рядом) — нужно на десктопе или это лишнее?</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  // Drawer в макете: кнопка ☰ открывает рельс — так видно, что навигация не потеряна.
+  document.querySelector('.phone .topbar .icon-btn').addEventListener('click', () => {
+    document.getElementById('drawer').classList.toggle('open');
+  });
+</script>
+</body>
+</html>

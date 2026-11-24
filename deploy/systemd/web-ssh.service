@@ -1,0 +1,37 @@
+[Unit]
+Description=Web SSH — веб-терминал, сессии в отдельных воркерах
+Documentation=file:///opt/web-ssh/docs/ARCHITECTURE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=webssh
+Group=webssh
+WorkingDirectory=/opt/web-ssh
+EnvironmentFile=/etc/web-ssh/web-ssh.env
+ExecStart=/usr/bin/node /opt/web-ssh/dist/index.js
+
+# Ключевой пункт: KillMode=process шлёт SIGTERM только главному процессу.
+# Дефолтный control-group вместе с веб-слоем убил бы воркеры сессий — то есть ровно то,
+# ради чего сервис разделён на процессы. Сессии должны пережить restart/deploy.
+KillMode=process
+TimeoutStopSec=20
+
+Restart=always
+RestartSec=2
+
+# Воркеры — отдельные процессы вне группы сервиса; для Node нужен запас на heap.
+LimitNOFILE=65536
+
+# Права: писать можно только в /var/lib/web-ssh (БД, мастер-ключ, сокеты сессий).
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ReadWritePaths=/var/lib/web-ssh
+StateDirectory=web-ssh
+StateDirectoryMode=0700
+
+[Install]
+WantedBy=multi-user.target

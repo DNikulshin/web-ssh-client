@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Web SSH v3</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --faint: #6e7681;
+    --accent: #58a6ff; --green: #3fb950; --red: #f85149;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  main { width: 100%; max-width: 560px; }
+  h1 { font-size: 18px; font-weight: 650; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; line-height: 1.6; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 12px; }
+  .row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .row + .row { margin-top: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+  .dot.ok { background: var(--green); }
+  .dot.bad { background: var(--red); }
+  .k { color: var(--muted); }
+  .v { margin-left: auto; font-family: var(--mono); font-size: 12px; }
+  a.btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; padding: 10px 14px; border-radius: 8px;
+    background: rgba(88,166,255,.12); border: 1px solid rgba(88,166,255,.35);
+    color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 550;
+  }
+  a.btn:hover { background: rgba(88,166,255,.18); }
+  .hint { color: var(--faint); font-size: 12px; line-height: 1.6; margin-top: 14px; }
+  code { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Web SSH v3</h1>
+  <p class="sub">
+    Ядро поднято и работает: креды в БД под шифрованием, сессии в отдельных процессах,
+    история вывода на сервере. Веб-интерфейс собирается — пока здесь состояние сервиса.
+  </p>
+
+  <div class="card">
+    <div class="row"><i class="dot" id="d-health"></i><span class="k">API</span><span class="v" id="v-health">проверяю…</span></div>
+    <div class="row"><i class="dot" id="d-auth"></i><span class="k">Вход</span><span class="v" id="v-auth">—</span></div>
+    <div class="row"><i class="dot" id="d-setup"></i><span class="k">Владелец</span><span class="v" id="v-setup">—</span></div>
+  </div>
+
+  <a class="btn" href="/design/mock.html">Открыть макет интерфейса →</a>
+
+  <p class="hint">
+    Первый запуск: регистрация владельца — <code>POST /api/auth/register</code>, затем
+    <code>WEB_SSH_ALLOW_REGISTRATION=false</code>. Проверки: <code>node tools/verify.mjs</code>.
+    Устройство сервиса — <code>docs/ARCHITECTURE.md</code>.
+  </p>
+</main>
+
+<script>
+  const set = (id, state, text) => {
+    const dot = document.getElementById('d-' + id);
+    dot.className = 'dot' + (state === true ? ' ok' : state === false ? ' bad' : '');
+    document.getElementById('v-' + id).textContent = text;
+  };
+
+  fetch('/api/health')
+    .then((r) => r.json())
+    .then((j) => set('health', true, 'ok · ' + j.uptime + ' c'))
+    .catch(() => set('health', false, 'недоступен'));
+
+  fetch('/api/auth/state')
+    .then((r) => r.json())
+    .then((j) => {
+      set('auth', true, j.authenticated ? 'выполнен · ' + j.login : 'не выполнен');
+      set('setup', j.needsSetup ? false : true, j.needsSetup ? 'нужно создать владельца' : 'создан');
+    })
+    .catch(() => {
+      set('auth', null, '—');
+      set('setup', null, '—');
+    });
+</script>
+</body>
+</html>

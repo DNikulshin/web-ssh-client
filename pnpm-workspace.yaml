@@ -1,0 +1,4 @@
+packages: []
+allowBuilds:
+  cpu-features: false
+  ssh2: false
