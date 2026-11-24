@@ -100,6 +100,31 @@ let ssh: Client | null = null;
 let fakeTimer: NodeJS.Timeout | null = null;
 
 const clients = new Set<ClientConn>();
+
+// Ввод, пришедший до готовности shell, нельзя терять: пользователь начинает печатать
+// сразу после подключения к странице, а SSH-хендшейк занимает секунды. Молчаливая потеря
+// набранного выглядит как «клавиатура не работает». Ограничение нужно, чтобы клиент,
+// заливший мегабайт в ещё не поднятую сессию, не съел память воркера.
+const pendingInput: Buffer[] = [];
+let pendingInputBytes = 0;
+const MAX_PENDING_INPUT = 64 * 1024;
+
+function writeInput(data: Buffer): void {
+  if (stream) {
+    stream.write(data);
+    return;
+  }
+  if (pendingInputBytes + data.length > MAX_PENDING_INPUT) return;
+  pendingInput.push(data);
+  pendingInputBytes += data.length;
+}
+
+function flushPendingInput(): void {
+  if (!stream) return;
+  for (const chunk of pendingInput) stream.write(chunk);
+  pendingInput.length = 0;
+  pendingInputBytes = 0;
+}
 const ring: RingChunk[] = [];
 let ringBytes = 0;
 
@@ -236,6 +261,7 @@ function startFakeTransport(): void {
     on() {},
   };
   setStatus('active');
+  flushPendingInput();
 }
 
 function startSshTransport(): void {
@@ -280,6 +306,7 @@ function startSshTransport(): void {
       }
       stream = ch as never;
       setStatus('active');
+      flushPendingInput();
       ch.on('data', (data: Buffer) => onOutput(data));
       ch.stderr?.on('data', (data: Buffer) => onOutput(data));
       ch.on('close', (code: number | null, signal?: string) => {
@@ -357,7 +384,7 @@ const server = net.createServer((socket) => {
     }
     for (const frame of frames) {
       if (frame.type === FRAME_IN) {
-        stream?.write(frame.payload);
+        writeInput(frame.payload);
         continue;
       }
       if (frame.type !== FRAME_CONTROL) continue;

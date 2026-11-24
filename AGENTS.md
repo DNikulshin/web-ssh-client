@@ -22,6 +22,13 @@ node src/hub/cli.ts reconcile
 Локальный запуск: `pnpm install && cp .env.example .env && node --watch src/index.ts`,
 первый вход — регистрация владельца на `/`, пока в БД нет пользователей.
 
+Реальный SSH проверяется гейтед-тестом (без переменных он пропускается, а не «проходит»):
+
+```bash
+WEB_SSH_TEST_HOST=127.0.0.1 WEB_SSH_TEST_USER=$USER WEB_SSH_TEST_KEY=~/.ssh/webssh-test \
+  node --test test/real-ssh.test.ts
+```
+
 ## Инварианты, которые нельзя ломать
 
 1. **Секрет не покидает сервер.** Ни один API не возвращает пароль/ключ. Креды шифруются
